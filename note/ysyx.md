@@ -25,8 +25,9 @@ Keep It Simple, Stupid
 谢谢
 
 ---
+# 工具使用
 
-# git使用
+## git使用
 
 - 添加多个ssh密匙时，在.ssh文件夹中应配置config文件用于配置私匙对应的服务器。
 
@@ -39,6 +40,7 @@ Keep It Simple, Stupid
 
     # github
     Host github.com
+    吧                                                                                     
     HostName github.com
     PreferredAuthentications publickey
     IdentityFile ~/.ssh/github_id_rsa
@@ -51,12 +53,13 @@ Keep It Simple, Stupid
     ```
 - 常用指令
     ```
-    操作:   git init    
+    操作:   git init    git clone
             git add     git commit -m "xxx"     git push    
             git checkout (-b xxx)（创造并切换到xxx分支）
             git merge --no-f xxx（无论能否都提交到仓库）
             git reset --hard (xxx)（时间点的哈希值）
             git remote add      git push\pull
+            git push --set-upstream （添加当前分支内容到远程仓库）
     ```
 
     ```
@@ -65,4 +68,37 @@ Keep It Simple, Stupid
             git log --graph
             git reflog（log为当前状态为终点，reflog为仓库操作日志）
     ```
+- 在Github上查看分支差别（使用URL）
+  > 两个分支比较        https://github.com/Pinksheepa/ysyx-2024 `/main...branch-A`
+  > 七天前比较          https://github.com/Pinksheepa/ysyx-2024 `/main{@7.day.ago}...main`
+  > 具体某一日期        https://github.com/Pinksheepa/ysyx-2024 `/main{@2024-12-12}...main`
+
+## vscode 
+
+- anaconda管理的虚拟环境要激活使用
+  ```
+  conda activate xxx(环境名或者绝对路径)
+  
+  conda env list(查看当前所处环境)
+  ```
+
+
+
+## Linux基础学习
+
+### VIM操作
+
+- 文字移动 `hjkl`  `w` `e` `b`   (`%`符号移动) `o`
+- 修改 `i` `a` `A` `d` `r` `c`  `:(%)s/.../.../g`
+  > `d + w // + $ // + e // + dd`
+  > `y` `p`
+- 数字用于重复次数      `d2w` `2w` `0`
+- 撤销 `u` ctrl+r 恢复
+- `p` 将删除暂存的内容插入
+- 页面移动 ctrl+G `gg` `G` `...G` 
+- 查找 `/...` `n` `N`
+- 退出和保存 `:w ...` `:q!` 
+- 运行外部指令 `:!` 
+- 文本选择 `v`
+- 文本融合 `:r`
 
