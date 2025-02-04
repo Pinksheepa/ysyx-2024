@@ -28,6 +28,13 @@ Keep It Simple, Stupid
 # 工具使用
 
 ## git使用
+- 生成ssh私匙和公匙
+  ```
+
+
+  ```
+
+
 
 - 添加多个ssh密匙时，在.ssh文件夹中应配置config文件用于配置私匙对应的服务器。
 
@@ -54,7 +61,7 @@ Keep It Simple, Stupid
 - 常用指令
     ```
     操作:   git init    git clone
-            git add     git commit -m "xxx"     git push    
+            git add(--all)     git commit -m "xxx"     git push    
             git checkout (-b xxx)（创造并切换到xxx分支）
             git merge --no-f xxx（无论能否都提交到仓库）
             git reset --hard (xxx)（时间点的哈希值）
@@ -73,6 +80,17 @@ Keep It Simple, Stupid
   > 七天前比较          https://github.com/Pinksheepa/ysyx-2024 `/main{@7.day.ago}...main`
   > 具体某一日期        https://github.com/Pinksheepa/ysyx-2024 `/main{@2024-12-12}...main`
 
+- 现有仓库添加子仓库
+  1. 添加 `git submodule add <子仓库URL> <路径>`
+  2. 更新 `在子仓库中操作,再父仓库提交`
+  在父仓库中，子仓库的内容默认是固定的，只会随着父仓库的提交而更新子仓库的引用。
+  3. 删除
+    - 删除子仓库引用  `git submodule deinit <子仓库路径>`
+    - 删除子仓库的文件 `git rm <路>`
+    - 删除子仓库 `rm -rf <子仓库>`
+    - 报错`git submodule: already exists in the index`原因是暂存区还存在
+      `git rm -r --cached <路径>`
+
 ## vscode 
 
 - anaconda管理的虚拟环境要激活使用
@@ -82,23 +100,56 @@ Keep It Simple, Stupid
   conda env list(查看当前所处环境)
   ```
 
-
+---
 
 ## Linux基础学习
 
+### 虚拟机VMvare
+
+- :watermelon: 共享文件夹挂载方式
+`echo '.host:/ /home/pink/share fuse.vmhgfs-fuse allow_other,defaults 0 0' >> /etc/fstab`
+
+
 ### VIM操作
 
-- 文字移动 `hjkl`  `w` `e` `b`   (`%`符号移动) `o`
-- 修改 `i` `a` `A` `d` `r` `c`  `:(%)s/.../.../g`
-  > `d + w // + $ // + e // + dd`
-  > `y` `p`
-- 数字用于重复次数      `d2w` `2w` `0`
-- 撤销 `u` ctrl+r 恢复
-- `p` 将删除暂存的内容插入
-- 页面移动 ctrl+G `gg` `G` `...G` 
-- 查找 `/...` `n` `N`
-- 退出和保存 `:w ...` `:q!` 
-- 运行外部指令 `:!` 
-- 文本选择 `v`
-- 文本融合 `:r`
+- 常用指令
+  ```
+  - 文字移动 `hjkl`  `w` `e` `b`   (`%`符号移动) `o`
+  - 修改 `i` `a` `A` `d` `r` `c`  `:(%)s/.../.../g`
+    > `d + w // + $ // + e // + dd`
+    > `y` `p`
+  - 数字用于重复次数      `d2w` `2w` `0`
+  - 撤销 `u` ctrl+r 恢复
+  - `p` 将删除暂存的内容插入
+  - 页面移动 ctrl+G `gg` `G` `...G` 
+  - 查找 `/...` `n` `N`
+  - 退出和保存 `:w ...` `:q!` 
+  - 运行外部指令 `:!` 
+  - 文本选择 `v`
+  - 文本融合 `:r`
+  ```
+
+- 修改windows编写的shell脚本  `:set ff=unix`
+
+
+
+
+
+
+### 命令行操作
+```
+文件管理 - cd, pwd, mkdir, rmdir, ls, cp, rm, mv, tar
+文件检索 - cat, more, less, head, tail, file, find
+输入输出控制 - 重定向, 管道, tee, xargs
+文本处理 - vim, grep, awk, sed, sort, wc, uniq, cut, tr
+正则表达式
+系统监控 - jobs, ps, top, kill, free, dmesg, lsof
+```
+ 
+ 
+### 安装verilator
+
+[参照官网手册-git安装](https://verilator.org/guide/latest/install.html#detailed-build-instructions)
+
+https://zhuanlan.zhihu.com/p/672636291
 
