@@ -29,12 +29,10 @@ Keep It Simple, Stupid
 
 ## git使用
 - 生成ssh私匙和公匙
-  ```
-
-
-  ```
-
-
+  1. 查看现有的私匙 `cd ./.ssh`
+  2. 生成密匙 `ssh-keygen -t rsa -C "xxx@xxx.com"`
+  3. 查看公匙 `cat id_rsa.pub`
+  4. 在远程仓库添加公匙
 
 - 添加多个ssh密匙时，在.ssh文件夹中应配置config文件用于配置私匙对应的服务器。
 
@@ -100,9 +98,28 @@ Keep It Simple, Stupid
   conda env list(查看当前所处环境)
   ```
 
+## verilog语言学习
+- 声明模块的小tips
+  1. `#(NR_KEY = 2, KEY_LEN = 1, DATA_LEN = 1)`是参数化模块的方式,实例化时可灵活修改#()中参数
+   ```
+   module MuxKey #(NR_KEY = 2, KEY_LEN = 1, DATA_LEN = 1) (
+        output [DATA_LEN-1:0] out,
+        input [KEY_LEN-1:0] key,
+        input [NR_KEY*(KEY_LEN + DATA_LEN)-1:0] lut
+    );
+    MuxKeyInternal #(NR_KEY, KEY_LEN, DATA_LEN, 0) i0 (out, key, {DATA_LEN{1'b0}}, lut);
+  endmodule
+  ```
+  
+
 ---
 
 ## Linux基础学习
+1. apt依赖冲突问题，可改用aptitude安装
+2. `source ~/.bashrc`可以强制重新加载 .bashrc 文件，使更改立即生效，而不需要关闭并重新打开终端
+   如果你对 .bashrc 文件进行了修改（例如添加了新的别名或环境变量），这些更改不会立即生效，因为 .bashrc 只在启动新的 shell 时加载。
+
+
 
 ### 虚拟机VMvare
 
@@ -145,11 +162,31 @@ Keep It Simple, Stupid
 正则表达式
 系统监控 - jobs, ps, top, kill, free, dmesg, lsof
 ```
+- 添加环境变量
+  
+  1. 进入bashrc文件
+    ```
+    cd ~
+    vim .bashrc
+    ```
+  2. 在文件末尾添加环境变量
+  ```
+    变量名=变量值...=...
+    export 变量名 ...
+  如：JAVA_HOME=/opt/jdk-12.0.2
+  　　CLASSPATH=.
+  　　PATH=$JAVA_HOME/bin:$PATH
+  　　export JAVA_HOME CLASSPATH PATH
+  ```
+    3. 最后运行.bashrc文件脚本，使立即生效（否则重启）
+  `source .bashrc # 注：如果不执行 source 命令，则需重启系统才能生效`
  
- 
-### 安装verilator
+### 安装和使用verilator
 
 [参照官网手册-git安装](https://verilator.org/guide/latest/install.html#detailed-build-instructions)
 
 https://zhuanlan.zhihu.com/p/672636291
+
+[使用verilator和NVboard](https://blog.csdn.net/Naruto123456__/article/details/141272106)
+此外还在此基础上编写了生成tb_top.cpp的Makefile文件，一键编译更加方便
 
