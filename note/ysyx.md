@@ -57,7 +57,6 @@ Keep It Simple, Stupid
     IdentityFile ~/.ssh/gitee_id_rsa
     ```
 - 常用指令
-    ```
     操作:   git init    git clone
             git add(--all)     git commit -m "xxx"     git push    
             git checkout (-b xxx)（创造并切换到xxx分支）
@@ -98,19 +97,7 @@ Keep It Simple, Stupid
   conda env list(查看当前所处环境)
   ```
 
-## verilog语言学习
-- 声明模块的小tips
-  1. `#(NR_KEY = 2, KEY_LEN = 1, DATA_LEN = 1)`是参数化模块的方式,实例化时可灵活修改#()中参数
-   ```
-   module MuxKey #(NR_KEY = 2, KEY_LEN = 1, DATA_LEN = 1) (
-        output [DATA_LEN-1:0] out,
-        input [KEY_LEN-1:0] key,
-        input [NR_KEY*(KEY_LEN + DATA_LEN)-1:0] lut
-    );
-    MuxKeyInternal #(NR_KEY, KEY_LEN, DATA_LEN, 0) i0 (out, key, {DATA_LEN{1'b0}}, lut);
-  endmodule
-  ```
-  
+
 
 ---
 
