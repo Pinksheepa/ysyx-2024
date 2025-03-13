@@ -1,0 +1,5 @@
+top=top
+
+data_in (SW7, SW6, SW5, SW4, SW3, SW2, SW1, SW0)
+clk BTNC
+seg (SEG0A, SEG0B, SEG0C, SEG0D, SEG0E, SEG0F, SEG0G, DEC0P)
