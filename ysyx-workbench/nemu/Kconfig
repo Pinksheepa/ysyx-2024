@@ -151,6 +151,15 @@ config ITRACE_COND
   string "Only trace instructions when the condition is true"
   default "true"
 
+config WATCHPOINT
+  bool "Enable watchpoint functionality"
+  default y
+  help
+    This enables NEMU's watchpoint functionality.
+    Watchpoints allow you to monitor the values of specific expressions
+    and halt program execution when their values change.
+    If you don't need to use watchpoints, you can disable this option
+    to improve NEMU's performance.
 
 config DIFFTEST
   depends on TARGET_NATIVE_ELF
