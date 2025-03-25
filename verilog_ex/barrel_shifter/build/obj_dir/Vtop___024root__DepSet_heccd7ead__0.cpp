@@ -12,45 +12,20 @@ void Vtop___024root___eval_act(Vtop___024root* vlSelf) {
     VL_DEBUG_IF(VL_DBG_MSGF("+    Vtop___024root___eval_act\n"); );
 }
 
+extern const VlUnpacked<CData/*7:0*/, 16> Vtop__ConstPool__TABLE_h7b554c95_0;
+
 VL_INLINE_OPT void Vtop___024root___nba_sequent__TOP__0(Vtop___024root* vlSelf) {
     if (false && vlSelf) {}  // Prevent unused
     Vtop__Syms* const __restrict vlSymsp VL_ATTR_UNUSED = vlSelf->vlSymsp;
     VL_DEBUG_IF(VL_DBG_MSGF("+    Vtop___024root___nba_sequent__TOP__0\n"); );
-    // Body
-    vlSelf->__Vdly__top__DOT__shift_reg = vlSelf->top__DOT__shift_reg;
-}
-
-VL_INLINE_OPT void Vtop___024root___nba_sequent__TOP__1(Vtop___024root* vlSelf) {
-    if (false && vlSelf) {}  // Prevent unused
-    Vtop__Syms* const __restrict vlSymsp VL_ATTR_UNUSED = vlSelf->vlSymsp;
-    VL_DEBUG_IF(VL_DBG_MSGF("+    Vtop___024root___nba_sequent__TOP__1\n"); );
-    // Body
-    vlSelf->__Vdly__top__DOT__shift_reg = ((0U == (IData)(vlSelf->top__DOT__shift_reg))
-                                            ? 1U : (IData)(vlSelf->data_in));
-}
-
-VL_INLINE_OPT void Vtop___024root___nba_sequent__TOP__2(Vtop___024root* vlSelf) {
-    if (false && vlSelf) {}  // Prevent unused
-    Vtop__Syms* const __restrict vlSymsp VL_ATTR_UNUSED = vlSelf->vlSymsp;
-    VL_DEBUG_IF(VL_DBG_MSGF("+    Vtop___024root___nba_sequent__TOP__2\n"); );
-    // Body
-    vlSelf->__Vdly__top__DOT__shift_reg = ((0U == (IData)(vlSelf->top__DOT__shift_reg))
-                                            ? 1U : (IData)(vlSelf->top__DOT__data_out));
-}
-
-extern const VlUnpacked<CData/*7:0*/, 16> Vtop__ConstPool__TABLE_h7b554c95_0;
-
-VL_INLINE_OPT void Vtop___024root___nba_sequent__TOP__3(Vtop___024root* vlSelf) {
-    if (false && vlSelf) {}  // Prevent unused
-    Vtop__Syms* const __restrict vlSymsp VL_ATTR_UNUSED = vlSelf->vlSymsp;
-    VL_DEBUG_IF(VL_DBG_MSGF("+    Vtop___024root___nba_sequent__TOP__3\n"); );
     // Init
     IData/*31:0*/ top__DOT__u_encode83_priority__DOT__i;
     top__DOT__u_encode83_priority__DOT__i = 0;
     CData/*3:0*/ __Vtableidx1;
     __Vtableidx1 = 0;
     // Body
-    vlSelf->top__DOT__shift_reg = vlSelf->__Vdly__top__DOT__shift_reg;
+    vlSelf->top__DOT__shift_reg = ((0U == (IData)(vlSelf->top__DOT__shift_reg))
+                                    ? 1U : (IData)(vlSelf->top__DOT__data_out));
     vlSelf->top__DOT__data_out = ((0x80U & (VL_REDXOR_4(
                                                         (0xfU 
                                                          & (IData)(vlSelf->top__DOT__shift_reg))) 
@@ -83,17 +58,8 @@ void Vtop___024root___eval_nba(Vtop___024root* vlSelf) {
     Vtop__Syms* const __restrict vlSymsp VL_ATTR_UNUSED = vlSelf->vlSymsp;
     VL_DEBUG_IF(VL_DBG_MSGF("+    Vtop___024root___eval_nba\n"); );
     // Body
-    if (vlSelf->__VnbaTriggered.at(2U)) {
-        Vtop___024root___nba_sequent__TOP__0(vlSelf);
-    }
     if (vlSelf->__VnbaTriggered.at(0U)) {
-        Vtop___024root___nba_sequent__TOP__1(vlSelf);
-    }
-    if (vlSelf->__VnbaTriggered.at(1U)) {
-        Vtop___024root___nba_sequent__TOP__2(vlSelf);
-    }
-    if (vlSelf->__VnbaTriggered.at(2U)) {
-        Vtop___024root___nba_sequent__TOP__3(vlSelf);
+        Vtop___024root___nba_sequent__TOP__0(vlSelf);
     }
 }
 
@@ -110,7 +76,7 @@ void Vtop___024root___eval(Vtop___024root* vlSelf) {
     Vtop__Syms* const __restrict vlSymsp VL_ATTR_UNUSED = vlSelf->vlSymsp;
     VL_DEBUG_IF(VL_DBG_MSGF("+    Vtop___024root___eval\n"); );
     // Init
-    VlTriggerVec<3> __VpreTriggered;
+    VlTriggerVec<1> __VpreTriggered;
     IData/*31:0*/ __VnbaIterCount;
     CData/*0:0*/ __VnbaContinue;
     // Body
@@ -161,7 +127,5 @@ void Vtop___024root___eval_debug_assertions(Vtop___024root* vlSelf) {
     // Body
     if (VL_UNLIKELY((vlSelf->clk & 0xfeU))) {
         Verilated::overWidthError("clk");}
-    if (VL_UNLIKELY((vlSelf->load & 0xfeU))) {
-        Verilated::overWidthError("load");}
 }
 #endif  // VL_DEBUG

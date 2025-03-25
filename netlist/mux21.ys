@@ -1,3 +1,0 @@
-read_verilog -sv -formal -overwrite {workspace}/verilog_ex/mux.v
-design -reset-vlog; proc;
-write_json {workspace}/netlist/mux21.json

@@ -105,8 +105,23 @@ Keep It Simple, Stupid
 1. apt依赖冲突问题，可改用aptitude安装
 2. `source ~/.bashrc`可以强制重新加载 .bashrc 文件，使更改立即生效，而不需要关闭并重新打开终端
    如果你对 .bashrc 文件进行了修改（例如添加了新的别名或环境变量），这些更改不会立即生效，因为 .bashrc 只在启动新的 shell 时加载。
-
-
+3. **函数中的arg是什么意思？**
+   `int main(int argc, char *argv[])`
+   arg——argument，参数
+   |          名称          |        含义        |      例子      |
+   | :--------------------: | :----------------: | :------------: |
+   |          argc          | int	argument count |    参数个数    |
+   | argv	char*[] 或 char** |  argument vector   | 参数字符串数组 |
+4. **为什么printf()的输出要换行?**
+    标准输出（stdout）默认采用行缓冲模式：当输出内容包含换行符\n时，缓冲区会立即刷新，将内容显示到终端；若不换行，则需等待缓冲区填满或程序正常结束才会刷新。
+    ```
+        #include <stdio.h>
+        int main() {
+            printf("No newline");  // 可能不显示
+            // fflush(stdout);     // 手动刷新可解决
+            return 0;               // 程序正常退出时，缓冲区自动刷新
+        }
+    ```
 
 ### 虚拟机VMvare
 

@@ -11,7 +11,6 @@ Vtop::Vtop(VerilatedContext* _vcontextp__, const char* _vcname__)
     : VerilatedModel{*_vcontextp__}
     , vlSymsp{new Vtop__Syms(contextp(), _vcname__, this)}
     , clk{vlSymsp->TOP.clk}
-    , load{vlSymsp->TOP.load}
     , data_in{vlSymsp->TOP.data_in}
     , seg{vlSymsp->TOP.seg}
     , rootp{&(vlSymsp->TOP)}
