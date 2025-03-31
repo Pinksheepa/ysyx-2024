@@ -75,6 +75,9 @@ OBJDUMP   = $(CROSS_COMPILE)objdump
 OBJCOPY   = $(CROSS_COMPILE)objcopy
 READELF   = $(CROSS_COMPILE)readelf
 
+### 添加NEMU批处理模式参数
+NEMU_ARGS += --batch
+
 ### Compilation flags
 INC_PATH += $(WORK_DIR)/include $(addsuffix /include/, $(addprefix $(AM_HOME)/, $(LIBS)))
 INCFLAGS += $(addprefix -I, $(INC_PATH))
@@ -148,6 +151,14 @@ archive: $(ARCHIVE)
 image-dep: $(LIBS) $(IMAGE).elf
 .NOTPARALLEL: image-dep
 .PHONY: image image-dep archive run $(LIBS)
+
+# ### 定义运行目标，传递批处理模式参数
+# run: 根据需要实现abstract-machine/klib/src/string.c中列出的字符串处理函数, 让cpu-tests中的测试用例string可以成功运行
+# ifneq ($(filter $(ARCH),nemu),)
+#     @$(AM_HOME)/tools/run-nemu.sh $(IMAGE).bin $(NEMU_ARGS)
+# else
+#     @echo "Unsupported architecture $(ARCH) for running"
+# endif
 
 ### Clean a single project (remove `build/`)
 clean:
