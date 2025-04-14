@@ -58,7 +58,8 @@ sim:
 # 清理生成的文件
 clean:
 	rm -rf $(OBJ_DIR)
-
+	rm waveform.vcd
+	
 .PHONY: sim clean
 
 
