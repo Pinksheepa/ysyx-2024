@@ -5,6 +5,12 @@ module top (
         input  wire rst    // 复位信号
     );
 
+    
+    import "DPI-C" function int pmem_read(input int addr, input int len);
+    import "DPI-C" function void pmem_write(input int addr, input int data, input int len);
+    import "DPI-C" function void sim_exit(input int exit_code);
+    import "DPI-C" function void npc_putchar(input byte ch);
+
     // ----- 内部连线 -----
     // PC相关
     wire [31:0] pc;
@@ -14,6 +20,9 @@ module top (
 
     // 指令相关
     wire [31:0] inst;
+
+    // 确保ebreak检测逻辑是正确的
+    wire is_ebreak = (inst == 32'h00100073);
 
     // 译码器输出
     wire [ 4:0] rs1_addr;
@@ -32,8 +41,8 @@ module top (
     wire        is_jalr;
     wire        is_lui;
     wire        is_auipc;
-    wire        is_ebreak;
     wire        use_imm;
+
 
     // 寄存器数据
     wire [31:0] rs1_data;
@@ -101,7 +110,6 @@ module top (
             .is_jalr(is_jalr),
             .is_lui(is_lui),
             .is_auipc(is_auipc),
-            .is_ebreak(is_ebreak),
             .use_imm(use_imm)
         );
 
@@ -158,7 +166,6 @@ module top (
             .csr_write_data(rs1_data),
             .csr_write(opcode == `OPCODE_SYSTEM && funct3 != 3'b000),
             .csr_read_data(csr_read_data),
-            .is_ebreak(is_ebreak),
             .trap_flag(trap_flag)
         );
 
@@ -187,22 +194,14 @@ module top (
         else begin
             cycle_count <= cycle_count + 1;
 
-            // 打印调试信息
-            $display("-------- Cycle %0d --------", cycle_count);
-            $display("PC = 0x%h, Instruction = 0x%h", pc, inst);
-
-            if (reg_write && rd_addr != 0) begin
-                $display("写入寄存器 x%0d = %0d", rd_addr, rd_data);
-            end
-
-            // 检测ebreak指令
+            // 确保ebreak处理在主控制流中
             if (is_ebreak) begin
-                $display("\n-------- EBREAK detected at PC = 0x%h --------", pc);
-                $display("寄存器最终状态:");
-                for (integer i = 0; i < 32; i = i + 1) begin
-                    $display("x%0d = %0d", i, gpr.rf[i]);
-                end
-                $finish;
+                $display("\n\n=== EBREAK 指令被执行 ===");
+                $display("PC = 0x%x", pc);
+                $display("退出码 = %d (a0 寄存器中的值)", gpr.rf[10]); // a0是x10寄存器
+                
+                // 使用DPI-C函数终止仿真
+                sim_exit(gpr.rf[10]); // 传递a0寄存器的值作为退出码
             end
         end
     end

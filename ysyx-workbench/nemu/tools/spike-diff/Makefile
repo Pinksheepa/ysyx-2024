@@ -32,6 +32,7 @@ $(SPIKE): $(REPO_MAKEFILE)
 BUILD_DIR = ./build
 $(shell mkdir -p $(BUILD_DIR))
 
+# Modify INC_PATH to include fesvr directory explicitly
 inc_dependencies = fesvr riscv disasm customext fdt softfloat spike_main spike_dasm build
 INC_PATH  = -I$(REPO_PATH) $(addprefix -I$(REPO_PATH)/, $(inc_dependencies))
 INC_PATH += -I$(NEMU_HOME)/include

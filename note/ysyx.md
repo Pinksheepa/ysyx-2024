@@ -182,6 +182,9 @@ Keep It Simple, Stupid
   ```
     3. 最后运行.bashrc文件脚本，使立即生效（否则重启）
   `source .bashrc # 注：如果不执行 source 命令，则需重启系统才能生效`
+
+- 一键把空格替换为Tab（wrong separator）
+  `sed -i 's/^    /\t/' xxx.mk` (sudo)
  
 ### 安装和使用verilator
 
@@ -192,3 +195,37 @@ https://zhuanlan.zhihu.com/p/672636291
 [使用verilator和NVboard](https://blog.csdn.net/Naruto123456__/article/details/141272106)
 此外还在此基础上编写了生成tb_top.cpp的Makefile文件，一键编译更加方便
 
+---
+
+# RISC-V学习
+
+## 英文缩写释义
+- **rd** destination register
+- **rs** source register
+- **imm** 立即数
+
+
+
+## 基本指令集
+
+### 基本指令
+- **addi**
+- **auipc**
+
+
+- **jal**
+- **jalr**
+
+- **sw** 将源寄存器rs2的内容存储到内存地址(rs1+imm)处，存储4字节宽度的数据
+
+- **ebreak**
+
+
+
+### 伪指令
+方便编程而存在的指令，由基本指令组成
+- **li** `addi rd, x0, imm`
+- **mv**  `addi a0, a0, 0`
+
+- **ret** `jalr x0, 0(ra)` 跳转到ra寄存器中保存的地址
+- **j** `jal x0, offset` 

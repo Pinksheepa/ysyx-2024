@@ -151,6 +151,16 @@ config ITRACE_COND
   string "Only trace instructions when the condition is true"
   default "true"
 
+config DTRACE
+  depends on TRACE && TARGET_NATIVE_ELF && ENGINE_INTERPRETER
+  bool "Enable device access tracer"
+  default y
+  help
+    This enables device access tracing in NEMU.
+    It will record and display device access operations,
+    including the device name, access type (read/write),
+    address, and data.
+
 config WATCHPOINT
   bool "Enable watchpoint functionality"
   default y
