@@ -14,6 +14,14 @@ Vtop::Vtop(VerilatedContext* _vcontextp__, const char* _vcname__)
     , vlSymsp{new Vtop__Syms(contextp(), _vcname__, this)}
     , clk{vlSymsp->TOP.clk}
     , rst{vlSymsp->TOP.rst}
+    , imem_valid{vlSymsp->TOP.imem_valid}
+    , dmem_valid{vlSymsp->TOP.dmem_valid}
+    , dmem_wen{vlSymsp->TOP.dmem_wen}
+    , imem_addr{vlSymsp->TOP.imem_addr}
+    , imem_rdata{vlSymsp->TOP.imem_rdata}
+    , dmem_addr{vlSymsp->TOP.dmem_addr}
+    , dmem_rdata{vlSymsp->TOP.dmem_rdata}
+    , dmem_wdata{vlSymsp->TOP.dmem_wdata}
     , rootp{&(vlSymsp->TOP)}
 {
     // Register model with the context

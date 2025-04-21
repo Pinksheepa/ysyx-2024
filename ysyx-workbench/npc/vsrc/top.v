@@ -1,210 +1,145 @@
-`include "include/defines.v"
-
+// 处理器顶层模块
 module top (
-        input  wire clk,   // 时钟信号
-        input  wire rst    // 复位信号
+        input wire clk,            // 时钟信号
+        input wire rst,            // 复位信号
+
+        // 指令内存接口
+        output wire [31:0] imem_addr,    // 指令地址
+        input  wire [31:0] imem_rdata,   // 读取的指令数据
+        output wire        imem_valid,   // 指令访问有效信号
+
+        // 数据内存接口
+        output wire [31:0] dmem_addr,    // 数据地址
+        input  wire [31:0] dmem_rdata,   // 读取的数据
+        output wire [31:0] dmem_wdata,   // 写入的数据
+        output wire        dmem_valid,   // 数据访问有效信号
+        output wire [3:0]  dmem_wen      // 写使能信号，按字节控制
     );
 
-    
-    import "DPI-C" function int pmem_read(input int addr, input int len);
-    import "DPI-C" function void pmem_write(input int addr, input int data, input int len);
-    import "DPI-C" function void sim_exit(input int exit_code);
-    import "DPI-C" function void npc_putchar(input byte ch);
+    // 内存基地址常量定义
+    // parameter IMEM_BASE = 32'h8000_0000;  // 指令内存基地址
+    parameter DMEM_BASE = 32'h8010_0000;  // 数据内存基地址
 
-    // ----- 内部连线 -----
-    // PC相关
-    wire [31:0] pc;
-    wire [31:0] next_pc;
-    wire [31:0] pc_plus_4 = pc + 32'd4;
-    wire [31:0] branch_target;
+    // PC寄存器信号
+    wire [31:0] pc;           // 当前PC值
+    wire [31:0] next_pc;      // 下一条指令地址
+    wire        pc_wen;       // PC写使能
 
-    // 指令相关
-    wire [31:0] inst;
+    // 指令相关信号
+    wire [31:0] inst;         // 当前指令
+    wire [2:0]  funct3;       // 添加funct3信号
 
-    // 确保ebreak检测逻辑是正确的
-    wire is_ebreak = (inst == 32'h00100073);
+    // 控制信号
+    wire        reg_wen;      // 寄存器写使能
+    wire        mem_wen;      // 内存写使能
+    wire        mem_ren;      // 内存读使能
+    wire [3:0]  alu_op;       // ALU操作码
+    wire        use_imm;      // 使用立即数标志
+    wire        branch;       // 分支指令标志
+    wire        jump;         // 跳转指令标志
 
-    // 译码器输出
-    wire [ 4:0] rs1_addr;
-    wire [ 4:0] rs2_addr;
-    wire [ 4:0] rd_addr;
-    wire [ 6:0] opcode;
-    wire [ 2:0] funct3;
-    wire [ 6:0] funct7;
-    wire [ 2:0] inst_type;
-    wire [ 3:0] alu_op;
-    wire        mem_read;
-    wire        mem_write;
-    wire        reg_write;
-    wire        is_branch;
-    wire        is_jal;
-    wire        is_jalr;
-    wire        is_lui;
-    wire        is_auipc;
-    wire        use_imm;
+    // 数据信号
+    wire [4:0]  rs1;          // 源寄存器1
+    wire [4:0]  rs2;          // 源寄存器2
+    wire [4:0]  rd;           // 目标寄存器
+    wire [31:0] rs1_data;     // 源寄存器1数据
+    wire [31:0] rs2_data;     // 源寄存器2数据
+    wire [31:0] imm;          // 立即数
+    wire [31:0] alu_src1;     // ALU源操作数1
+    wire [31:0] alu_src2;     // ALU源操作数2
+    wire [31:0] alu_result;   // ALU结果
+    wire [31:0] wb_data;      // 写回数据
+    wire        branch_taken; // 分支是否跳转
+    // wire is_jal;         // 是否为jal指令
+    wire is_jalr;        // 是否为jalr指令
 
+    // 调试信号
+    wire [31:0] reg_x1;       // x1寄存器值(ra)
+    wire [31:0] reg_x2;       // x2寄存器值(sp)
+    wire [31:0] reg_a0;       // a0寄存器值(x10)
 
-    // 寄存器数据
-    wire [31:0] rs1_data;
-    wire [31:0] rs2_data;
-    wire [31:0] rd_data;
+    // 从指令中提取funct3字段
+    assign funct3 = inst[14:12];
 
-    // 立即数
-    wire [31:0] imm;
+    // 指令取指模块实例化
+    IFU ifu (
+            .clk        (clk),
+            .rst        (rst),
+            .pc         (pc),
+            .imem_addr  (imem_addr),
+            .imem_rdata (imem_rdata),
+            .imem_valid (imem_valid),
+            .inst       (inst)
+        );
 
-    // ALU相关
-    wire [31:0] alu_src1;
-    wire [31:0] alu_src2;
-    wire [31:0] alu_result;
-    wire        alu_zero;
-    wire        alu_less_than;
-
-    // 内存相关
-    wire [31:0] mem_read_data;
-
-    // CSR相关
-    wire [31:0] csr_read_data;
-    wire        trap_flag;
-
-    // 分支条件判断
-    wire branch_taken = is_branch & (
-             (funct3 == 3'b000 & alu_zero) |             // BEQ
-             (funct3 == 3'b001 & ~alu_zero) |            // BNE
-             (funct3 == 3'b100 & alu_less_than) |        // BLT
-             (funct3 == 3'b101 & ~alu_less_than) |       // BGE
-             (funct3 == 3'b110 & (rs1_data < rs2_data)) | // BLTU
-             (funct3 == 3'b111 & (rs1_data >= rs2_data))  // BGEU
-         );
-
-    // ----- 程序计数器 -----
-    PC_Reg pc_reg (
-               .clk(clk),
-               .rst(rst),
-               .next_pc(next_pc),
-               .pc(pc)
-           );
-
-    // ----- 指令存储器 -----
-    InstMem inst_mem (
-                .clk(clk),
-                .addr(pc),
-                .inst(inst)
-            );
-
-    // ----- 指令译码单元 -----
+    // 指令译码模块实例化
     IDU idu (
-            .inst(inst),
-            .rs1_addr(rs1_addr),
-            .rs2_addr(rs2_addr),
-            .rd_addr(rd_addr),
-            .opcode(opcode),
-            .funct3(funct3),
-            .funct7(funct7),
-            .inst_type(inst_type),
-            .alu_op(alu_op),
-            .mem_read(mem_read),
-            .mem_write(mem_write),
-            .reg_write(reg_write),
-            .is_branch(is_branch),
-            .is_jal(is_jal),
-            .is_jalr(is_jalr),
-            .is_lui(is_lui),
-            .is_auipc(is_auipc),
-            .use_imm(use_imm)
+            .clk        (clk),
+            .rst        (rst),
+            .inst       (inst),
+            .rs1_data   (rs1_data),
+            .rs2_data   (rs2_data),
+            .rs1        (rs1),
+            .rs2        (rs2),
+            .rd         (rd),
+            .imm        (imm),
+            .reg_wen    (reg_wen),
+            .mem_wen    (mem_wen),
+            .mem_ren    (mem_ren),
+            .alu_op     (alu_op),
+            .use_imm    (use_imm),
+            .branch     (branch),
+            .jump       (jump),
+            // .is_jal     (is_jal),
+            .is_jalr    (is_jalr)
         );
 
-    // ----- 立即数生成单元 -----
-    ImmGen imm_gen (
-               .inst(inst),
-               .inst_type(inst_type),
-               .imm(imm)
+    // 执行单元实例化 - 添加DMEM_BASE参数
+    EXU exu (
+            .clk         (clk),
+            .rst         (rst),
+            .rs1_data    (rs1_data),
+            .rs2_data    (rs2_data),
+            .rs1         (rs1),
+            .rs2         (rs2),
+            .rd          (rd),
+            .imm         (imm),
+            .pc          (pc),
+            .reg_wen     (reg_wen),
+            .mem_wen     (mem_wen),
+            .mem_ren     (mem_ren),
+            .alu_op      (alu_op),
+            .use_imm     (use_imm),
+            .branch      (branch),
+            .jump        (jump),
+            .funct3      (funct3),    // 添加funct3连接
+            .inst        (inst),      // 添加inst连接，用于EBREAK检测
+            .wb_data     (wb_data),
+            .alu_result  (alu_result),
+            .branch_taken(branch_taken),
+            .dmem_addr   (dmem_addr),
+            .dmem_rdata  (dmem_rdata),
+            .dmem_wdata  (dmem_wdata),
+            .dmem_valid  (dmem_valid),
+            .dmem_wen    (dmem_wen),
+            .DMEM_BASE   (DMEM_BASE),  // 传递数据内存基地址
+            // .reg_x1      (reg_x1),    // 连接调试接口信号
+            // .reg_x2      (reg_x2),    // 连接调试接口信号
+            // .reg_a0      (reg_a0)     // 连接调试接口信号
+            // .is_jal     (is_jal),
+            .is_jalr    (is_jalr)
+        );
+
+    // PC寄存器实例化
+    PC_Reg pc_reg (
+               .clk         (clk),
+               .rst         (rst),
+               .next_pc     (next_pc),
+               .pc          (pc),
+               .pc_wen      (1'b1)  // PC始终更新
            );
 
-    // ----- 通用寄存器组 -----
-    GPR gpr (
-            .clk(clk),
-            .rst(rst),
-            .rs1_addr(rs1_addr),
-            .rs2_addr(rs2_addr),
-            .rd_addr(rd_addr),
-            .rd_data(rd_data),
-            .reg_write(reg_write),
-            .rs1_data(rs1_data),
-            .rs2_data(rs2_data)
-        );
-
-    // ----- 算术逻辑单元 -----
-    // 选择ALU输入
-    assign alu_src1 = (is_auipc | is_jal) ? pc : rs1_data;
-    assign alu_src2 = use_imm ? imm : rs2_data;
-
-    ALU alu (
-            .src1(alu_src1),
-            .src2(alu_src2),
-            .alu_op(alu_op),
-            .result(alu_result),
-            .zero(alu_zero),
-            .less_than(alu_less_than)
-        );
-
-    // ----- 数据存储器 -----
-    DataMem data_mem (
-                .clk(clk),
-                .addr(alu_result),
-                .write_data(rs2_data),
-                .mem_write(mem_write),
-                .mem_read(mem_read),
-                .funct3(funct3),
-                .read_data(mem_read_data)
-            );
-
-    // ----- CSR控制状态寄存器 -----
-    CSR csr (
-            .clk(clk),
-            .rst(rst),
-            .csr_addr(inst[31:20]),
-            .csr_write_data(rs1_data),
-            .csr_write(opcode == `OPCODE_SYSTEM && funct3 != 3'b000),
-            .csr_read_data(csr_read_data),
-            .trap_flag(trap_flag)
-        );
-
-    // ----- 结果选择 -----
-    // 计算分支目标地址
-    assign branch_target = is_jalr ? (rs1_data + imm) & ~32'h1 : pc + imm;
-
-    // 选择下一个PC值
-    assign next_pc = (is_jal || (is_branch && branch_taken) || is_jalr) ?
-           branch_target : pc_plus_4;
-
-    // 选择写回寄存器的数据
-    assign rd_data = is_lui ? imm :
-           (is_auipc || is_jal || is_jalr) ? pc_plus_4 :
-           mem_read ? mem_read_data :
-           alu_result;
-
-    // ----- 调试信息 -----
-    // 监控周期和指令执行
-    reg [31:0] cycle_count;
-
-    always @(posedge clk) begin
-        if (rst) begin
-            cycle_count <= 0;
-        end
-        else begin
-            cycle_count <= cycle_count + 1;
-
-            // 确保ebreak处理在主控制流中
-            if (is_ebreak) begin
-                $display("\n\n=== EBREAK 指令被执行 ===");
-                $display("PC = 0x%x", pc);
-                $display("退出码 = %d (a0 寄存器中的值)", gpr.rf[10]); // a0是x10寄存器
-                
-                // 使用DPI-C函数终止仿真
-                sim_exit(gpr.rf[10]); // 传递a0寄存器的值作为退出码
-            end
-        end
-    end
+    // 下一条PC的计算
+    assign next_pc = branch_taken ? alu_result : (pc + 4);
 
 endmodule
-

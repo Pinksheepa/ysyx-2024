@@ -16,14 +16,8 @@ extern "C" {
 
 
     // DPI IMPORTS
-    // DPI import at vsrc/top.v:12:34
-    extern void npc_putchar(char ch);
-    // DPI import at vsrc/top.v:9:33
-    extern int pmem_read(int addr, int len);
-    // DPI import at vsrc/top.v:10:34
-    extern void pmem_write(int addr, int data, int len);
-    // DPI import at vsrc/top.v:11:34
-    extern void sim_exit(int exit_code);
+    // DPI import at vsrc/EXU.v:44:34
+    extern void npc_ebreak(int a0_value);
 
 #ifdef __cplusplus
 }

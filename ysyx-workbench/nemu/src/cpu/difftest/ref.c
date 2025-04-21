@@ -22,50 +22,47 @@ __EXPORT void difftest_memcpy(paddr_t addr, void *buf, size_t n, bool direction)
 {
   if (direction == DIFFTEST_TO_REF)
   {
-    // 从DUT复制到NEMU（参考模型）
+    // 从DUT复制到REF (NEMU)
     memcpy(guest_to_host(addr), buf, n);
   }
   else
   {
-    // 从NEMU复制到DUT
+    // 从REF复制到DUT
     memcpy(buf, guest_to_host(addr), n);
   }
 }
 
 __EXPORT void difftest_regcpy(void *dut, bool direction)
 {
+  // 根据direction复制寄存器
   if (direction == DIFFTEST_TO_REF)
   {
-    // 从DUT复制到参考模型NEMU
+    // 从DUT复制到REF (NEMU)
     memcpy(&cpu, dut, DIFFTEST_REG_SIZE);
   }
   else
   {
-    // 从参考模型NEMU复制到DUT
+    // 从REF复制到DUT
     memcpy(dut, &cpu, DIFFTEST_REG_SIZE);
   }
 }
 
 __EXPORT void difftest_exec(uint64_t n)
 {
-  // 执行n条指令
-  for (uint64_t i = 0; i < n; i++)
-  {
-    // 执行一条指令
-    cpu_exec(1);
-  }
+  // 执行N条指令
+  cpu_exec(n);
 }
 
 __EXPORT void difftest_raise_intr(word_t NO)
 {
-  // 按照要求，目前暂不使用
-  assert(0);
+  // 暂时不实现，用于中断支持
 }
 
 __EXPORT void difftest_init(int port)
 {
   void init_mem();
   init_mem();
-  /* Perform ISA dependent initialization. */
+
+  // 执行ISA相关的初始化
   init_isa();
 }

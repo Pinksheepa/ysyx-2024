@@ -1,362 +1,691 @@
-#include <verilated.h>
-#include <verilated_vcd_c.h>
-#include "Vtop.h"
-#include "Vtop___024root.h"
-#include "Vtop__Dpi.h"
-#include <verilated_dpi.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <stdint.h>
-#include <string.h>
-#include <sys/time.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <errno.h>
+#include <iostream>
+#include <vector>
+#include <memory>
+#include <string>
 
-// 模拟器参数定义
-#define MAX_SIM_TIME 100000               // 最大模拟周期
-#define MEMORY_SIZE (256 * 1024 * 1024) // 256MB
-#define PMEM_BASE 0x80000000            // 物理内存起始地址
+#include "verilated.h"
+#include "verilated_vcd_c.h"
+#include "verilated_dpi.h"
+#include "Vtop.h"
+// 添加Vtop___024root.h头文件，使用正确的相对路径
+#include "../obj_dir/Vtop___024root.h"
+#include "log.h"
+#include "sdb.h"      // 添加SDB头文件
+#include "difftest.h" // 添加DiffTest头文件
 
-// 全局变量
-static bool simulation_finished = false;
-static uint8_t *pmem = NULL;
-static bool wave_enable = true;
+// 添加全局变量用于控制仿真结束
+static bool ebreak_triggered = false;
+static int trap_code = 0; // 用于存储退出代码，0表示GOOD TRAP，其他值表示BAD TRAP
 
-// 内存映射函数
-static inline bool in_pmem_range(uint32_t addr)
+// 添加指向顶层模块的全局指针
+static Vtop *top_module = nullptr;
+
+// DPI-C export implementation
+extern "C" int get_gpr(int index)
 {
-  return addr >= PMEM_BASE && addr < PMEM_BASE + MEMORY_SIZE;
+  if (top_module && index >= 0 && index < 32)
+  {
+    // 使用顶层模块的rootp指针访问寄存器数组
+    return top_module->rootp->top__DOT__exu__DOT__regfile__DOT__registers[index];
+  }
+  return 0;
 }
 
-static inline uint8_t *guest_to_host(uint32_t paddr)
+// DPI-C - 在Verilog中通过npc_ebreak()调用，a0_value是从Verilog传递过来的a0寄存器值
+extern "C" void npc_ebreak(int a0_value)
 {
-  // 检查地址是否有效
-  assert(in_pmem_range(paddr));
-  // 计算主机内存偏移
-  return pmem + (paddr - PMEM_BASE);
-}
-
-// DPI-C函数实现
-extern "C"
-{
-  // 模拟退出
-  void sim_exit(int exit_code)
+  // 直接使用传入的a0寄存器值
+  trap_code = a0_value;
+  printf("\n\033[1;32m[npc] EBREAK instruction executed\033[0m\n");
+  if (trap_code == 0)
   {
-    if (exit_code == 0)
-    {
-      printf("\033[1;32m[NPC] HIT GOOD TRAP at ebreak, exit code = %d\033[0m\n", exit_code);
-    }
-    else
-    {
-      printf("\033[1;31m[NPC] HIT BAD TRAP at ebreak, exit code = %d\033[0m\n", exit_code);
-    }
-    simulation_finished = true;
-  }
-
-  // 内存读取
-  int pmem_read(int addr, int len)
-  {
-    // 特殊处理0地址 - 这通常发生在复位后第一次取指
-    if (addr == 0)
-    {
-      printf("\033[1;33m[NPC] Memory read from address 0, returning jump to PMEM_BASE\033[0m\n");
-      return 0x7001B7; // JAL指令 - 跳转到0x80000000
-    }
-
-    // 检查地址是否在有效范围内
-    if (!in_pmem_range(addr))
-    {
-      printf("\033[1;31m[NPC] Memory read out of bounds: 0x%08x\033[0m\n", addr);
-      return 0x00000013; // 返回NOP指令(addi x0, x0, 0)而不是0
-    }
-
-    uint8_t *haddr = guest_to_host(addr);
-    int rdata = 0;
-
-    switch (len)
-    {
-    case 1:
-      rdata = *(uint8_t *)haddr;
-      break;
-    case 2:
-      rdata = *(uint16_t *)haddr;
-      break;
-    case 4:
-      rdata = *(uint32_t *)haddr;
-      break;
-    default:
-      printf("\033[1;31m[NPC] Unsupported read width: %d\033[0m\n", len);
-      assert(0);
-    }
-
-    return rdata;
-  }
-
-  // 内存写入
-  void pmem_write(int addr, int data, int len)
-  {
-    // 检查地址是否在有效范围内
-    if (!in_pmem_range(addr))
-    {
-      printf("\033[1;31m[NPC] Memory write out of bounds: 0x%08x\033[0m\n", addr);
-      return;
-    }
-
-    uint8_t *haddr = guest_to_host(addr);
-
-    switch (len)
-    {
-    case 1:
-      *(uint8_t *)haddr = data & 0xFF;
-      break;
-    case 2:
-      *(uint16_t *)haddr = data & 0xFFFF;
-      break;
-    case 4:
-      *(uint32_t *)haddr = data;
-      break;
-    default:
-      printf("\033[1;31m[NPC] Unsupported write width: %d\033[0m\n", len);
-      assert(0);
-    }
-  }
-
-  // 添加DPI-C函数用于字符输出
-  void npc_putchar(char ch)
-  {
-    putchar(ch);
-    fflush(stdout); // 确保立即输出
-  }
-}
-
-// 显示使用说明
-static void show_usage(const char *prog_name)
-{
-  printf("Usage: %s [options] [binary_file]\n", prog_name);
-  printf("Options:\n");
-  printf("  -h, --help         Show this help message\n");
-  printf("  -t, --time <n>     Set maximum simulation time (cycles)\n");
-  printf("  -w, --wave         Enable waveform dump\n");
-  printf("\n");
-  printf("Examples:\n");
-  printf("  %s program.bin     Load and run program.bin\n", prog_name);
-  printf("  %s -w program.bin  Run program.bin with waveform dump enabled\n", prog_name);
-  printf("\n");
-  printf("Program file is loaded to memory at 0x%08x\n", PMEM_BASE);
-}
-
-// 加载程序到内存
-static long load_program(const char *filename)
-{
-  if (filename == NULL)
-  {
-    printf("\033[1;31m[NPC] No program file specified\033[0m\n");
-    return -1;
-  }
-
-  printf("\033[1;32m[NPC] Attempting to load program: %s\033[0m\n", filename);
-
-  // 检查文件信息
-  struct stat file_stat;
-  if (stat(filename, &file_stat) != 0)
-  {
-    printf("\033[1;31m[NPC] Cannot stat file '%s': %s (errno=%d)\033[0m\n",
-           filename, strerror(errno), errno);
-    return -1;
-  }
-
-  printf("\033[1;32m[NPC] File exists, size: %ld bytes, permissions: %o\033[0m\n",
-         file_stat.st_size, file_stat.st_mode & 0777);
-
-  // 打开文件
-  FILE *fp = fopen(filename, "rb");
-  if (fp == NULL)
-  {
-    printf("\033[1;31m[NPC] Cannot open '%s': %s (errno=%d)\033[0m\n",
-           filename, strerror(errno), errno);
-    return -1;
-  }
-
-  // 检查程序大小是否超出内存范围
-  if (file_stat.st_size > MEMORY_SIZE)
-  {
-    printf("\033[1;31m[NPC] Program too large: %ld bytes > %d bytes\033[0m\n",
-           file_stat.st_size, MEMORY_SIZE);
-    fclose(fp);
-    return -1;
-  }
-
-  // 读取文件内容到内存，直接使用内存映射
-  uint8_t *prog_start = guest_to_host(PMEM_BASE);
-  size_t bytes_read = fread(prog_start, 1, file_stat.st_size, fp);
-  if (bytes_read != (size_t)file_stat.st_size)
-  {
-    printf("\033[1;31m[NPC] Error reading '%s': read %ld of %ld bytes: %s\033[0m\n",
-           filename, bytes_read, (long)file_stat.st_size,
-           ferror(fp) ? strerror(errno) : "Incomplete read");
-    fclose(fp);
-    return -1;
-  }
-
-  fclose(fp);
-  printf("\033[1;32m[NPC] Program '%s' loaded successfully, size: %ld bytes\033[0m\n",
-         filename, (long)file_stat.st_size);
-
-  // 打印加载的前16个字节，用于调试
-  printf("\033[1;32m[NPC] Program header (first 16 bytes):\033[0m ");
-  for (int i = 0; i < 16 && i < file_stat.st_size; i++)
-  {
-    printf("%02x ", prog_start[i]);
-  }
-  printf("\n");
-  printf("\033[1;32m[NPC] Program loaded at address 0x%08x\033[0m\n", PMEM_BASE);
-
-  return file_stat.st_size;
-}
-
-// 主函数
-int main(int argc, char *argv[])
-{
-  // 初始化上下文
-  Verilated::commandArgs(argc, argv);
-
-  // 解析命令行参数
-  const char *program_file = NULL;
-  uint64_t max_sim_time = MAX_SIM_TIME;
-
-  printf("[NPC] Command line arguments: ");
-  for (int i = 0; i < argc; i++)
-  {
-    printf("%s ", argv[i]);
-  }
-  printf("\n");
-
-  for (int i = 1; i < argc; i++)
-  {
-    if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0)
-    {
-      show_usage(argv[0]);
-      return 0;
-    }
-    else if (strcmp(argv[i], "-w") == 0 || strcmp(argv[i], "--wave") == 0)
-    {
-      wave_enable = true;
-    }
-    else if (strcmp(argv[i], "-t") == 0 || strcmp(argv[i], "--time") == 0)
-    {
-      if (i + 1 < argc)
-      {
-        max_sim_time = atoll(argv[i + 1]);
-        i++;
-      }
-    }
-    else if (argv[i][0] != '-')
-    {
-      program_file = argv[i];
-    }
-    else
-    {
-      printf("\033[1;33m[NPC] Unknown option: %s\033[0m\n", argv[i]);
-    }
-  }
-
-  printf("[NPC] Program file: %s\n", program_file ? program_file : "None");
-  if (program_file == NULL)
-  {
-    printf("\033[1;31m[NPC] Error: No program file specified\033[0m\n");
-    show_usage(argv[0]);
-    return -1;
-  }
-
-  // 初始化模拟内存
-  pmem = (uint8_t *)malloc(MEMORY_SIZE);
-  if (pmem == NULL)
-  {
-    printf("\033[1;31m[NPC] Failed to allocate memory: %s\033[0m\n", strerror(errno));
-    return -1;
-  }
-
-  // 清零内存
-  memset(pmem, 0, MEMORY_SIZE);
-  printf("\033[1;32m[NPC] Allocated %d MB memory at %p\033[0m\n", MEMORY_SIZE / 1024 / 1024, pmem);
-  printf("\033[1;32m[NPC] Memory mapped from 0x%08x to 0x%08x\033[0m\n",
-         PMEM_BASE, PMEM_BASE + MEMORY_SIZE - 1);
-
-  // 加载程序
-  if (program_file != NULL)
-  {
-    if (load_program(program_file) < 0)
-    {
-      printf("\033[1;31m[NPC] Failed to load program, exiting\033[0m\n");
-      free(pmem);
-      return -1;
-    }
+    printf("\033[1;32m[npc] HIT GOOD TRAP\033[0m\n");
   }
   else
   {
-    printf("\033[1;33m[NPC] No program specified, simulation will start with empty memory\033[0m\n");
+    printf("\033[1;31m[npc] HIT BAD TRAP, exit code = %d\033[0m\n", trap_code);
+  }
+  ebreak_triggered = true;
+}
+
+// 内存大小定义
+#define MEM_SIZE (1024 * 1024) // 1MB 内存
+#define IMEM_BASE 0x80000000   // 指令内存基地址
+#define DMEM_BASE 0x80100000   // 数据内存基地址
+
+// DiffTest相关路径
+#define NEMU_SO_PATH "../nemu/build/riscv32-nemu-interpreter-so"
+
+// 存储器类，用于模拟物理内存
+class Memory
+{
+private:
+  uint8_t *mem;
+  size_t size;
+
+public:
+  Memory(size_t size) : size(size)
+  {
+    mem = new uint8_t[size](); // 分配并初始化为0
+    printf("[npc] Memory initialized, size = %zu bytes\n", size);
   }
 
-  // 初始化Verilator模型
-  Vtop *top = new Vtop;
-
-  // 设置波形跟踪
-  VerilatedVcdC *tfp = NULL;
-  if (wave_enable)
+  ~Memory()
   {
+    delete[] mem;
+    printf("[npc] Memory freed\n");
+  }
+
+  // 按字节读取
+  uint8_t readByte(uint32_t addr)
+  {
+    if (addr >= size)
+    {
+      Log_Error("Memory read out of bounds at 0x%08x", addr);
+      return 0;
+    }
+    return mem[addr];
+  }
+
+  // 按字（32位）读取
+  uint32_t readWord(uint32_t addr)
+  {
+    if (addr + 3 >= size)
+    {
+      Log_Error("Memory read out of bounds at 0x%08x", addr);
+      return 0;
+    }
+    return (uint32_t)readByte(addr) |
+           ((uint32_t)readByte(addr + 1) << 8) |
+           ((uint32_t)readByte(addr + 2) << 16) |
+           ((uint32_t)readByte(addr + 3) << 24);
+  }
+
+  // 按字节写入
+  void writeByte(uint32_t addr, uint8_t data)
+  {
+    if (addr >= size)
+    {
+      Log_Error("Memory write out of bounds at 0x%08x", addr);
+      return;
+    }
+    mem[addr] = data;
+  }
+
+  // 按字（32位）写入
+  void writeWord(uint32_t addr, uint32_t data)
+  {
+    if (addr + 3 >= size)
+    {
+      Log_Error("Memory write out of bounds at 0x%08x", addr);
+      return;
+    }
+    writeByte(addr, data & 0xFF);
+    writeByte(addr + 1, (data >> 8) & 0xFF);
+    writeByte(addr + 2, (data >> 16) & 0xFF);
+    writeByte(addr + 3, (data >> 24) & 0xFF);
+  }
+
+  // 获取内存指针，用于DiffTest复制内存
+  uint8_t *getMemPtr()
+  {
+    return mem;
+  }
+
+  // 加载ELF文件或二进制文件（简化实现）
+  bool loadBinary(const char *filename, uint32_t offset = 0)
+  {
+    FILE *fp = fopen(filename, "rb");
+    if (fp == NULL)
+    {
+      Log_Error("Cannot open file %s", filename);
+      return false;
+    }
+
+    fseek(fp, 0, SEEK_END);
+    long fileSize = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    if (offset + fileSize > size)
+    {
+      Log_Error("File too large to fit in memory");
+      fclose(fp);
+      return false;
+    }
+
+    size_t result = fread(mem + offset, 1, fileSize, fp);
+    if (result != (size_t)fileSize)
+    {
+      Log_Error("Failed to read file");
+      fclose(fp);
+      return false;
+    }
+
+    fclose(fp);
+    printf("[npc] Loaded %ld bytes from %s to memory at offset 0x%08x\n", fileSize, filename, offset);
+    return true;
+  }
+
+  // 打印内存内容（调试用）
+  void dump(uint32_t start, uint32_t length)
+  {
+    printf("[npc] Memory dump from 0x%08x, length %d bytes:\n", start, length);
+    for (uint32_t i = 0; i < length; i += 4)
+    {
+      if (i % 16 == 0)
+      {
+        printf("\n0x%08x: ", start + i);
+      }
+      printf("%08x ", readWord(start + i));
+    }
+    printf("\n");
+  }
+};
+
+// 处理器仿真器类
+class Simulator
+{
+private:
+  std::unique_ptr<VerilatedContext> contextp;
+  std::unique_ptr<Vtop> top;
+  std::unique_ptr<VerilatedVcdC> tfp; // 波形追踪
+  std::unique_ptr<Memory> memory;
+  std::unique_ptr<SDB> sdb; // 添加SDB调试器
+
+  vluint64_t main_time;
+  bool is_batch_mode;   // 批处理模式标志
+  bool enable_difftest; // DiffTest使能标志
+
+public:
+  Simulator(bool batch_mode = false, bool diff_test = false)
+      : main_time(0), is_batch_mode(batch_mode), enable_difftest(diff_test)
+  {
+    // 初始化仿真环境
+    contextp = std::make_unique<VerilatedContext>();
+    top = std::make_unique<Vtop>(contextp.get());
+
+    // 设置全局指针
+    top_module = top.get();
+
+    // 初始化波形追踪
     Verilated::traceEverOn(true);
-    tfp = new VerilatedVcdC;
-    top->trace(tfp, 99);
-    tfp->open("waveform.vcd");
+    tfp = std::make_unique<VerilatedVcdC>();
+    top->trace(tfp.get(), 99);
+    tfp->open("wave.vcd");
+
+    // 初始化内存
+    memory = std::make_unique<Memory>(MEM_SIZE);
+
+    // 初始信号
+    top->clk = 0;
+    top->rst = 1; // 初始复位
+
+    // 初始化SDB调试器
+    sdb = std::make_unique<SDB>(this, batch_mode);
+    sdb->init_sdb();
+
+    printf("[npc] Simulator initialized\n");
   }
 
-  // 仿真时间和时钟初始化
-  uint64_t sim_time = 0;
-  bool clk = 0;
-
-  // 主仿真循环
-  while (!simulation_finished && sim_time < max_sim_time)
-  {
-    // 设置信号
-    top->clk = clk;
-    top->rst = (sim_time < 10) ? 1 : 0;
-
-    // 评估模型
-    top->eval();
-
-    // 更新波形
-    if (wave_enable)
-    {
-      tfp->dump(sim_time);
-    }
-
-    // 翻转时钟
-    clk = !clk;
-    sim_time++;
-
-    // 每1000个周期输出一次进度
-    if (sim_time % 1000 == 0)
-    {
-      printf("\r[NPC] Simulation time: %ld cycles", sim_time);
-      fflush(stdout);
-    }
-  }
-
-  // 仿真结束
-  printf("\n[NPC] Simulation finished after %ld cycles\n", sim_time);
-
-  // 清理资源
-  if (wave_enable)
+  ~Simulator()
   {
     tfp->close();
-    delete tfp;
+    printf("[npc] Simulator finished\n");
+
+    // 关闭DiffTest
+    if (enable_difftest)
+    {
+      difftest_close();
+    }
   }
 
-  delete top;
-  free(pmem);
+  // 加载指令到内存
+  bool loadProgram(const char *filename)
+  {
+    bool result = memory->loadBinary(filename, IMEM_BASE - IMEM_BASE);
 
-  return 0;
+    // 如果启用了DiffTest，则初始化DiffTest
+    if (result && enable_difftest)
+    {
+      // 获取文件大小
+      FILE *fp = fopen(filename, "rb");
+      if (fp == NULL)
+      {
+        return false;
+      }
+      fseek(fp, 0, SEEK_END);
+      long img_size = ftell(fp);
+      fclose(fp);
+
+      // 初始化DiffTest
+      difftest_init(NEMU_SO_PATH, img_size);
+
+      // 复制镜像到REF
+      difftest_memcpy_to_ref(IMEM_BASE, memory->getMemPtr(), img_size);
+
+      // 初始化REF的CPU状态
+      CPU_state init_state;
+      memset(&init_state, 0, sizeof(init_state));
+      init_state.pc = IMEM_BASE; // 设置初始PC
+      difftest_regcpy_to_ref(&init_state);
+
+      printf("[npc] DiffTest initialized with %s\n", NEMU_SO_PATH);
+    }
+
+    return result;
+  }
+
+  void loadInstructions()
+  {
+    // 计算物理内存偏移 - 从IMEM_BASE的物理内存位置开始存储指令
+    uint32_t physOffset = 0; // 物理内存从0开始，对应逻辑地址IMEM_BASE (0x80000000)
+
+    // addi x1, x0, 10
+    memory->writeWord(physOffset, 0x00A00093);
+    physOffset += 4;
+
+    // addi x2, x0, 20
+    memory->writeWord(physOffset, 0x01400113);
+    physOffset += 4;
+
+    // add x3, x1, x2
+    memory->writeWord(physOffset, 0x002081B3);
+    physOffset += 4;
+
+    memory->writeWord(physOffset, 0x00100073);
+    physOffset += 8;
+
+    printf("[npc] Instructions loaded to memory starting at physical offset 0x%08x (maps to 0x%08x)\n",
+           0, IMEM_BASE);
+
+    // 调试信息 - 打印加载的指令
+    printf("[npc] Loaded instructions:\n");
+    for (uint32_t i = 0; i < 4; i++)
+    {
+      printf("  0x%08x: 0x%08x\n", IMEM_BASE + i * 4, memory->readWord(i * 4));
+    }
+
+    // 如果启用了DiffTest，则初始化DiffTest
+    if (enable_difftest)
+    {
+      // 初始化DiffTest
+      difftest_init(NEMU_SO_PATH, 4 * 4); // 4条指令，每条4字节
+
+      // 复制指令到REF
+      difftest_memcpy_to_ref(IMEM_BASE, memory->getMemPtr(), 4 * 4);
+
+      // 初始化REF的CPU状态
+      CPU_state init_state;
+      memset(&init_state, 0, sizeof(init_state));
+      init_state.pc = IMEM_BASE; // 设置初始PC
+      difftest_regcpy_to_ref(&init_state);
+
+      printf("[npc] DiffTest initialized with %s\n", NEMU_SO_PATH);
+    }
+  }
+
+  // 运行一个时钟周期
+  void step()
+  {
+    // 时钟信号翻转
+    top->clk = !top->clk;
+
+    // 在时钟上升沿之前处理存储器访问
+    if (top->clk == 1)
+    {
+      // 处理指令内存访问
+      if (top->imem_valid)
+      {
+        // 计算物理内存偏移
+        uint32_t physAddr = 0;
+        if (top->imem_addr >= IMEM_BASE)
+        {
+          physAddr = top->imem_addr - IMEM_BASE;
+          if (physAddr < MEM_SIZE)
+          {
+            uint32_t data = memory->readWord(physAddr);
+            top->imem_rdata = data;
+            // printf("IMEM read: addr=0x%08x, physAddr=0x%08x, data=0x%08x\n",
+            //       top->imem_addr, physAddr, data);
+          }
+          else
+          {
+            Log_Warning("Physical address 0x%08x out of range", physAddr);
+            top->imem_rdata = 0; // 读取无效数据返回0
+          }
+        }
+        else
+        {
+          if (top->rst != 1)
+          {
+            Log_Warning("Invalid instruction address 0x%08x", top->imem_addr);
+            top->imem_rdata = 0; // 无效地址返回0指令
+          }
+        }
+      }
+
+      // 处理数据内存访问
+      if (top->dmem_valid)
+      {
+        // 直接使用传入的dmem_addr，因为地址计算已在Verilog中完成
+        uint32_t addr = top->dmem_addr;
+        uint32_t physAddr = 0;
+
+        // 根据地址范围确定物理地址映射
+        if (addr >= IMEM_BASE && addr < DMEM_BASE)
+        {
+          physAddr = addr - IMEM_BASE;
+        }
+        else if (addr >= DMEM_BASE)
+        {
+          physAddr = addr - DMEM_BASE;
+        }
+        else
+        {
+          Log_Warning("Invalid data address111 0x%08x", addr);
+          if (!top->dmem_wen)
+          {
+            top->dmem_rdata = 0;
+          }
+          return;
+        }
+
+        if (physAddr < MEM_SIZE)
+        {
+          if (top->dmem_wen)
+          { // 写操作
+            memory->writeWord(physAddr, top->dmem_wdata);
+
+            // DiffTest：同步内存写操作
+            if (enable_difftest)
+            {
+              difftest_memcpy_to_ref(addr, &top->dmem_wdata, 4);
+            }
+          }
+          else
+          { // 读操作
+            uint32_t data = memory->readWord(physAddr);
+            top->dmem_rdata = data;
+          }
+        }
+        else
+        {
+          Log_Warning("Physical address 0x%08x out of range", physAddr);
+          if (!top->dmem_wen)
+          {
+            top->dmem_rdata = 0;
+          }
+        }
+      }
+    }
+
+    // 求值并推进仿真时间
+    top->eval();
+    tfp->dump(main_time);
+    main_time++;
+
+    // 在复位后的第一个时钟周期取消复位
+    if (main_time == 3)
+    {
+      top->rst = 0;
+    }
+
+    // 执行DiffTest
+    static uint32_t lastPC = 0;
+    static bool instrCompleted = false;
+
+    // 在时钟下降沿检查是否完成一条指令
+    if (top->clk == 0)
+    {
+      uint32_t currentPC = getPC();
+
+      // 如果PC发生变化，说明完成了一条指令
+      if (currentPC != lastPC && lastPC != 0)
+      {
+        instrCompleted = true;
+      }
+
+      lastPC = currentPC;
+
+      // 如果完成了一条指令且启用了DiffTest，进行DiffTest检查
+      if (instrCompleted && enable_difftest)
+      {
+        // 构造当前CPU状态
+        CPU_state dut_state;
+        memset(&dut_state, 0, sizeof(dut_state));
+
+        // 获取通用寄存器
+        for (int i = 0; i < 32; i++)
+        {
+          dut_state.gpr[i] = get_gpr(i);
+        }
+
+        // 获取PC（这里用的是当前PC，因为PC已经更新到下一条指令）
+        dut_state.pc = currentPC;
+
+        // 执行DiffTest
+        difftest_step(currentPC);
+
+        instrCompleted = false;
+      }
+    }
+  }
+
+  // 连续运行多个周期
+  void run(int cycles)
+  {
+    for (int i = 0; i < cycles * 2; i++)
+    {
+      step();
+    }
+  }
+
+  // 持续运行直到达到某个条件
+  void runUntil(std::function<bool(Vtop *)> stopCondition, int maxCycles = 1000000)
+  {
+    int cycles = 0;
+    while (!stopCondition(top.get()) && cycles < maxCycles && !ebreak_triggered)
+    {
+      step();
+      if (top->clk == 0)
+      { // 只在下降沿计数
+        cycles++;
+      }
+    }
+
+    if (cycles >= maxCycles)
+    {
+      Log_Warning("Reached maximum cycle count (%d)", maxCycles);
+    }
+    else if (ebreak_triggered)
+    {
+      printf("\033[1;32m[npc] ----- ebreak at 0x%08x -----\033[0m\n", getPC());
+      if (trap_code == 0)
+      {
+        printf("\033[1;32m[npc] GOOD TRAP\033[0m\n");
+      }
+      else
+      {
+        printf("\033[1;31m[npc] BAD TRAP, code = %d\033[0m\n", trap_code);
+      }
+    }
+    else
+    {
+      printf("[npc] Simulation stopped after %d cycles\n", cycles);
+    }
+  }
+
+  // 获取当前PC值
+  uint32_t getPC()
+  {
+    // 使用公开的 imem_addr 接口代替内部 PC 访问
+    return top->imem_addr;
+  }
+
+  // 打印处理器状态
+  void printStatus()
+  {
+    printf("[npc] Current PC: 0x%08x\n", getPC());
+    printf("[npc] Current Instruction: 0x%08x\n", top->imem_rdata);
+  }
+
+  // 读取内存的方法（供SDB使用）
+  uint32_t readMemory(uint32_t addr)
+  {
+    // 计算物理地址
+    uint32_t physAddr;
+    if (addr >= IMEM_BASE && addr < DMEM_BASE)
+    {
+      physAddr = addr - IMEM_BASE;
+    }
+    else if (addr >= DMEM_BASE)
+    {
+      physAddr = addr - DMEM_BASE;
+    }
+    else
+    {
+      // 无效地址
+      Log_Warning("Invalid memory address 0x%08x", addr);
+      return 0;
+    }
+
+    if (physAddr >= MEM_SIZE)
+    {
+      Log_Warning("Memory address 0x%08x out of range", addr);
+      return 0;
+    }
+
+    return memory->readWord(physAddr);
+  }
+
+  // 开始交互式调试会话
+  void startDebugSession()
+  {
+    if (!is_batch_mode)
+    {
+      printf("[npc] Starting debug session. Type 'help' for commands.\n");
+      sdb->sdb_mainloop();
+    }
+  }
+
+  // 设置DiffTest模式
+  void setDiffTest(bool enable)
+  {
+    enable_difftest = enable;
+  }
+
+  // 获取DiffTest模式状态
+  bool isDiffTestEnabled() const
+  {
+    return enable_difftest;
+  }
+};
+
+// 为SDB提供的辅助函数
+uint32_t get_pc(Simulator *sim)
+{
+  return sim->getPC();
+}
+
+uint32_t read_memory(Simulator *sim, uint32_t addr)
+{
+  return sim->readMemory(addr);
+}
+
+void execute_n_cycles(Simulator *sim, int n)
+{
+  // 执行n条指令（近似值，实际上是执行2*n个周期）
+  sim->run(n);
+}
+
+// 为SDB提供的辅助函数，用于持续运行至结束或中断
+void run_until_end(Simulator *sim, int maxCycles = 10000000)
+{
+  sim->runUntil([](Vtop *top)
+                {
+                  return false; // 返回false让仿真持续运行，直到ebreak触发或达到最大周期
+                },
+                maxCycles);
+}
+
+// 程序入口
+int main(int argc, char **argv)
+{
+  // 分析命令行参数
+  bool batch_mode = false;
+  bool diff_test = false; // 新增DiffTest参数
+
+  for (int i = 1; i < argc; i++)
+  {
+    if (strcmp(argv[i], "--batch") == 0)
+    {
+      batch_mode = true;
+    }
+    else if (strcmp(argv[i], "--diff") == 0)
+    {
+      diff_test = true; // 开启DiffTest模式
+    }
+  }
+
+  // 初始化Verilator
+  Verilated::commandArgs(argc, argv);
+
+  // 创建仿真器，传入DiffTest模式标志
+  Simulator sim(batch_mode, diff_test);
+
+  // 检查是否提供了二进制文件路径
+  const char *progFile = nullptr;
+  for (int i = 1; i < argc; i++)
+  {
+    if (strncmp(argv[i], "--", 2) != 0)
+    {
+      // 不是选项参数，认为是程序文件
+      progFile = argv[i];
+      break;
+    }
+  }
+
+  if (progFile)
+  {
+    if (!sim.loadProgram(progFile))
+    {
+      Log_Error("Can't load program! %s", progFile);
+      return 1;
+    }
+    printf("[npc] Loading: %s\n", progFile);
+  }
+  else
+  {
+    printf("[npc] No program provided!\n");
+    sim.loadInstructions();
+  }
+
+  printf("[npc] Starting simulation...\n");
+
+  if (batch_mode)
+  {
+    // 批处理模式：直接运行到结束
+    sim.runUntil([](Vtop *top)
+                 {
+                   return false; // 返回false让仿真继续，直到ebreak触发或达到最大周期
+                 },
+                 1000000);
+    printf("[npc] Simulation completed\n");
+  }
+  else
+  {
+    // 交互模式：启动调试会话
+    sim.startDebugSession();
+  }
+
+  // 如果是DiffTest模式且执行成功，打印成功信息
+  if (diff_test && trap_code == 0)
+  {
+    printf("\033[1;32m[npc] DiffTest 通过！\033[0m\n");
+  }
+
+  return trap_code;
 }
