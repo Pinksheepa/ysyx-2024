@@ -8,10 +8,20 @@
 #include "Vtop__Syms.h"
 #include "Vtop___024root.h"
 
+extern "C" void npc_ecall(int a0_value);
+
+VL_INLINE_OPT void Vtop___024root____Vdpiimwrap_top__DOT__dpi_system__DOT__npc_ecall_TOP(IData/*31:0*/ a0_value) {
+    VL_DEBUG_IF(VL_DBG_MSGF("+    Vtop___024root____Vdpiimwrap_top__DOT__dpi_system__DOT__npc_ecall_TOP\n"); );
+    // Body
+    int a0_value__Vcvt;
+    for (size_t a0_value__Vidx = 0; a0_value__Vidx < 1; ++a0_value__Vidx) a0_value__Vcvt = a0_value;
+    npc_ecall(a0_value__Vcvt);
+}
+
 extern "C" void npc_ebreak(int a0_value);
 
-VL_INLINE_OPT void Vtop___024root____Vdpiimwrap_top__DOT__exu__DOT__npc_ebreak_TOP(IData/*31:0*/ a0_value) {
-    VL_DEBUG_IF(VL_DBG_MSGF("+    Vtop___024root____Vdpiimwrap_top__DOT__exu__DOT__npc_ebreak_TOP\n"); );
+VL_INLINE_OPT void Vtop___024root____Vdpiimwrap_top__DOT__dpi_system__DOT__npc_ebreak_TOP(IData/*31:0*/ a0_value) {
+    VL_DEBUG_IF(VL_DBG_MSGF("+    Vtop___024root____Vdpiimwrap_top__DOT__dpi_system__DOT__npc_ebreak_TOP\n"); );
     // Body
     int a0_value__Vcvt;
     for (size_t a0_value__Vidx = 0; a0_value__Vidx < 1; ++a0_value__Vidx) a0_value__Vcvt = a0_value;

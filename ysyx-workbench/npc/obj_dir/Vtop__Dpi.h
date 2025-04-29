@@ -16,8 +16,10 @@ extern "C" {
 
 
     // DPI IMPORTS
-    // DPI import at vsrc/EXU.v:44:34
+    // DPI import at vsrc/DPI_System.v:14:45
     extern void npc_ebreak(int a0_value);
+    // DPI import at vsrc/DPI_System.v:13:34
+    extern void npc_ecall(int a0_value);
 
 #ifdef __cplusplus
 }

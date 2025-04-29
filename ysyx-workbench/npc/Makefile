@@ -10,6 +10,7 @@ sim:
 	verilator -Wall --Wno-DECLFILENAME --Wno-UNUSEDSIGNAL --Wno-WIDTHEXPAND \
 	--Wno-CASEINCOMPLETE --trace -cc --exe --build \
 	--Wno-SYNCASYNCNET	\
+	--Wno-PINCONNECTEMPTY \
 	--top-module top \
 	-I$(INCLUDE) $(CSRCS) $(VSRCS) \
 	--timing \

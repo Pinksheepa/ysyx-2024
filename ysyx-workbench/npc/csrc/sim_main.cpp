@@ -28,10 +28,39 @@ extern "C" int get_gpr(int index)
 {
   if (top_module && index >= 0 && index < 32)
   {
-    // 使用顶层模块的rootp指针访问寄存器数组
-    return top_module->rootp->top__DOT__exu__DOT__regfile__DOT__registers[index];
+    // 修改寄存器访问路径，与Verilog代码结构匹配
+    // 寄存器文件位于顶层模块中，而不是EXU模块内
+    return top_module->rootp->top__DOT__regfile__DOT__registers[index];
   }
   return 0;
+}
+
+// DPI-C - 处理ECALL指令，实现系统调用
+extern "C" void npc_ecall(int a0_value)
+{
+  // 简单的ECALL处理，检查a0寄存器值确定系统调用类型
+  printf("\n\033[1;34m[npc] ECALL instruction executed with a0 = %d\033[0m\n", a0_value);
+
+  // 根据a0值处理不同的系统调用（符合RISC-V约定）
+  switch (a0_value)
+  {
+  case 0: // SYS_exit
+    printf("\033[1;34m[npc] System call: exit(0)\033[0m\n");
+    trap_code = 0;
+    ebreak_triggered = true; // 也使用ebreak_triggered终止仿真
+    break;
+
+  case 1:                                                                                    // SYS_exit with error code
+    printf("\033[1;31m[npc] System call: exit(%d) - with error code\033[0m\n", get_gpr(11)); // a1寄存器
+    trap_code = get_gpr(11);                                                                 // 使用a1作为退出码
+    ebreak_triggered = true;
+    break;
+
+  // 可以根据需要添加更多系统调用
+  default:
+    printf("\033[1;33m[npc] Unhandled system call: %d\033[0m\n", a0_value);
+    break;
+  }
 }
 
 // DPI-C - 在Verilog中通过npc_ebreak()调用，a0_value是从Verilog传递过来的a0寄存器值
@@ -290,7 +319,7 @@ public:
     // addi x2, x0, 20
     memory->writeWord(physOffset, 0x01400113);
     physOffset += 4;
-
+ 
     // add x3, x1, x2
     memory->writeWord(physOffset, 0x002081B3);
     physOffset += 4;
